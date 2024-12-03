@@ -1,5 +1,6 @@
 import functools
 import inspect
+import threading
 import uuid
 from collections.abc import Callable
 from datetime import datetime
@@ -46,13 +47,28 @@ class Tool(BaseModel):
     
     def on_stop(self, fn: Callable):
         self.stop = fn
-        
+    
+    # we only use this for tools that have no stop function
+    _start_thread: Optional[threading.Thread] = None
+    
     def register_with_truffle(self):
         if self.start and self.stop:
             truffle.register_tool(self.start, name=f'start_{self.name}')
             truffle.register_tool(self.stop, name=f'stop_{self.name}')
         elif self.start:
-            truffle.register_tool(self.start, name=self.name)
+            # if there is no stop function, we should treat start in a way that allows us to kill it at any time
+            @functools.wraps(self.start)
+            def start_wrapper(*args, **kwargs):
+                self._start_thread = start_thread = threading.Thread(target=self.start, args=args, kwargs=kwargs)
+                start_thread.start()
+                return start_thread
+            
+            def stop():
+                if self._start_thread:
+                    self._start_thread.join()
+            
+            truffle.register_tool(start_wrapper, name=self.name)
+            truffle.register_tool(stop, name=f'stop_{self.name}')
         else:
             raise ValueError(f'Tool {self.name} must have a start method')
 
@@ -82,6 +98,8 @@ class App(BaseModel):
     def tool(self, name: str=None, description: str=None, start_fn: Callable=None, stop_fn: Callable=None):
         '''
         Make a function into a tool. Use like a decorator or a function call.
+        
+        NOTE: if you don't provide a stop function, the tool will be treated as a background thread and we will create a stop function that joins the thread for you. if you really want to make an unstoppable tool, you can provide a do-nothing stop function.
         
         Example as a decorator:
         >>> app = App(name="test", fullname="Test App", description="Test app", goal="Testing")
@@ -119,7 +137,7 @@ class App(BaseModel):
         ...     thread_pool.shutdown(wait=True)
         >>> thread_pool.shutdown()  # cleanup for doctest
         
-        >>> tool = app.tool(name="process_data", description="Process array of data in background thread pool")
+        >>> tool = app.tool(name="process_data", description="Process array of data in background thread pool")(start_fn=process_data, stop_fn=cleanup_threads)
         >>> tool.start(list(range(10)))
         >>> time.sleep(3.5)
         >>> tool.stop()
@@ -132,6 +150,17 @@ class App(BaseModel):
         >>> tool.start(list(range(10)))
         >>> time.sleep(3.5)
         >>> tool.stop()
+        
+        Example showing a tool with no stop function:
+        >>> tool = app.tool(start_fn=process_data)
+        >>> tool.start(list(range(10)))
+        >>> time.sleep(3.5)
+        >>> tool.stop()
+        Computed 0 * 2 = 0
+        Computed 1 * 2 = 2
+        Computed 2 * 2 = 4
+        
+        (although this is actually a bad idea because we didn't clean up the thread pool)
         '''
         def decorator(_start_fn: Callable):
             _name = name or _start_fn.__name__
