@@ -1,6 +1,7 @@
 from typing import List
 import uuid
 from datetime import datetime
+from typing import Dict
 
 from certiorari.app import app
 from certiorari.schema import (
@@ -41,6 +42,7 @@ case_store: dict[str, CaseDetails] = {}
 document_store: dict[str, CaseDocument] = {}
 timeline_event_store: dict[str, List[CaseTimelineEvent]] = {}
 
+
 @app.tool
 def initialize_case(case_details: CaseDetails) -> str:
     """
@@ -53,24 +55,23 @@ def initialize_case(case_details: CaseDetails) -> str:
         case_id: Unique identifier for case
     """
     # Validate required fields from schema
-    if not case_details.case_name or not case_details.jurisdiction or not case_details.case_type:
+    if (
+        not case_details.case_name
+        or not case_details.jurisdiction
+        or not case_details.case_type
+    ):
         raise ValueError("Case details missing required fields")
-    
+
     # Initialize case details
     case = CaseDetails(
         case_name=case_details.case_name,
         jurisdiction=case_details.jurisdiction,
         case_type=case_details.case_type,
-        parties=case_details.parties
+        parties=case_details.parties,
     )
 
     # Initialize timeline
-    timeline = CaseTimeline(
-        timeline=[],
-        event_relationships=[],
-        gaps=[],
-        conflicts=[]
-    )
+    timeline = CaseTimeline(timeline=[], event_relationships=[], gaps=[], conflicts=[])
 
     # Initialize strategy
     strategy = CaseStrategy(
@@ -79,7 +80,7 @@ def initialize_case(case_details: CaseDetails) -> str:
         evidence_gaps=[],
         recommended_actions=[],
         risk_analysis={},
-        timeline_issues=[]
+        timeline_issues=[],
     )
 
     # Initialize risk assessment
@@ -87,28 +88,21 @@ def initialize_case(case_details: CaseDetails) -> str:
         identified_risks=[],
         probability_levels=[],
         impact_assessment=[],
-        mitigation_plan=[]
+        mitigation_plan=[],
     )
 
     # Initialize schedule
-    schedule = Schedule(
-        events=[],
-        reminders=[],
-        deadlines=[]
-    )
+    schedule = Schedule(events=[], reminders=[], deadlines=[])
 
     # Initialize opposition analysis
-    opposition = OppositionAnalysis(
-        strategies=[],
-        weaknesses=[]
-    )
+    opposition = OppositionAnalysis(strategies=[], weaknesses=[])
 
     # Initialize outcome prediction
     prediction = CaseOutcomePrediction(
         likelihood_of_success=0.0,
         potential_awards=None,
         key_factors=[],
-        risk_factors=[]
+        risk_factors=[],
     )
 
     return case.id
@@ -128,47 +122,69 @@ def process_document(
     Returns:
         ProcessedDocument
     """
-    # Use LLM to analyze the document content
-    analysis_prompt = f"""
-    Please analyze the following legal document and extract:
+    # Step 1: Preprocess the document
+    preprocessed_content = preprocess_document(doc_content)
 
-    - Key facts
-    - Important dates
-    - Legal issues
-    - Evidence points
-    - Relationships between entities
+    # Step 2: Extract entities and relationships using the LLM
+    extraction_prompt = f"""
+    Analyze the following legal document and extract detailed information.
 
     Document:
-    {doc_content}
-    """
-    analysis_result = llm.chat([{"role": "user", "content": analysis_prompt}])
+    {preprocessed_content}
 
-    # Parse the LLM's response into the ProcessedDocument format
+    Extract the following:
+    - Key Facts (with citations)
+    - Important Dates and Events
+    - Legal Issues Discussed
+    - Evidence Points
+    - Relationships between Entities (e.g., parties, organizations)
+    Provide the extracted information in a structured JSON format.
+    """
+    extraction_response = llm.chat([{"role": "user", "content": extraction_prompt}])
+
+    # Step 3: Parse the response into ProcessedDocument
     processed_document = llm.structured_output(ProcessedDocument)
 
-    # Store the document in the vector store for future retrieval
+    # Step 4: Store embeddings for semantic search
     doc_id = str(uuid.uuid4())
-    vector_store.add_text(doc_content, {"doc_id": doc_id, **metadata.model_dump()})
+    embeddings = llm.embed_text(doc_content)
+    vector_store.add_text(
+        text=doc_content,
+        metadata={"doc_id": doc_id, **metadata.model_dump()},
+        embeddings=embeddings,
+    )
 
-    # Save the processed document
+    # Step 5: Save the document to the document store
     document_store[doc_id] = CaseDocument(
         id=uuid.UUID(doc_id),
         content=doc_content,
         **metadata.model_dump(),
         uploaded_at=datetime.now(),
         tags=[],
-        recipients=metadata.recipients,
-        author=metadata.author,
-        doc_type=metadata.doc_type,
     )
 
     return processed_document
 
 
+def preprocess_document(doc_content: str) -> str:
+    """
+    Preprocesses the document content for analysis.
+
+    Args:
+        doc_content: Document text
+
+    Returns:
+        Preprocessed text
+    """
+    # Implement preprocessing steps (e.g., removing headers, footers, OCR artifacts)
+    # For this example, we'll assume the content is clean
+    return doc_content
+
+
 @app.tool
 def construct_timeline(case_id: str) -> Timeline:
     """
-    Builds comprehensive case timeline.
+    Builds a comprehensive case timeline.
 
     Args:
         case_id: Case identifier
@@ -176,35 +192,25 @@ def construct_timeline(case_id: str) -> Timeline:
     Returns:
         Timeline
     """
-    # Retrieve all documents related to the case
-    related_docs = [
-        doc for doc in document_store.values() if doc.id in case_store[case_id].parties
-    ]
+    # Retrieve all relevant documents
+    related_docs = fetch_case_documents(case_id)
 
-    # Extract events from documents using LLM
+    # Initialize an empty list for events
     events = []
+
+    # Extract events from documents iteratively
     for doc in related_docs:
-        event_prompt = f"""
-        Extract any events with dates from the following document:
-
-        {doc.content}
-
-        Provide the events in the format:
-        - Date: YYYY-MM-DD
-        - Description: Brief description of the event
-        """
-        event_result = llm.chat([{"role": "user", "content": event_prompt}])
-        event_data = llm.structured_output(List[CaseTimelineEvent])
-        events.extend(event_data)
+        events.extend(extract_events_from_document(doc))
 
     # Sort events chronologically
     events.sort(key=lambda x: x.date)
 
-    # Detect causation chains, gaps, and conflicts
-    # (For simplicity, we'll use placeholders)
-    causation_chains = []
-    gaps = []
-    conflicts = []
+    # Detect causation chains
+    causation_chains = detect_causation_chains(events)
+
+    # Identify gaps and conflicts in the timeline
+    gaps = identify_timeline_gaps(events)
+    conflicts = identify_timeline_conflicts(events)
 
     # Save events to the timeline store
     timeline_event_store[case_id] = events
@@ -217,10 +223,97 @@ def construct_timeline(case_id: str) -> Timeline:
     )
 
 
+def fetch_case_documents(case_id: str) -> List[CaseDocument]:
+    """
+    Fetches all documents related to a case.
+
+    Args:
+        case_id: Case identifier
+
+    Returns:
+        List of CaseDocument
+    """
+    # Retrieve documents associated with the case
+    # For simplicity, return all documents in this example
+    return list(document_store.values())
+
+
+def extract_events_from_document(doc: CaseDocument) -> List[CaseTimelineEvent]:
+    """
+    Extracts events from a single document.
+
+    Args:
+        doc: CaseDocument
+
+    Returns:
+        List of CaseTimelineEvent
+    """
+    event_prompt = f"""
+    From the following document, extract all events with dates.
+
+    Document:
+    {doc.content}
+
+    For each event, provide:
+    - Date (YYYY-MM-DD format)
+    - Description
+    - Related entities
+    Return the information in a structured JSON format.
+    """
+    event_response = llm.chat([{"role": "user", "content": event_prompt}])
+    events = llm.structured_output(List[CaseTimelineEvent])
+    return events
+
+
+def detect_causation_chains(events: List[CaseTimelineEvent]) -> List[Dict]:
+    """
+    Detects causation chains among events.
+
+    Args:
+        events: List of CaseTimelineEvent
+
+    Returns:
+        List of causation chains
+    """
+    # Implement causation detection logic
+    # Placeholder implementation
+    return []
+
+
+def identify_timeline_gaps(events: List[CaseTimelineEvent]) -> List[Dict]:
+    """
+    Identifies gaps in the timeline.
+
+    Args:
+        events: List of CaseTimelineEvent
+
+    Returns:
+        List of gaps
+    """
+    # Implement gap identification logic
+    # Placeholder implementation
+    return []
+
+
+def identify_timeline_conflicts(events: List[CaseTimelineEvent]) -> List[Dict]:
+    """
+    Identifies conflicts in the timeline.
+
+    Args:
+        events: List of CaseTimelineEvent
+
+    Returns:
+        List of conflicts
+    """
+    # Implement conflict detection logic
+    # Placeholder implementation
+    return []
+
+
 @app.tool
 def generate_motion(params: MotionParams) -> MotionResult:
     """
-    Creates motion draft with citations.
+    Creates a motion draft with citations.
 
     Args:
         params: MotionParams
@@ -228,43 +321,112 @@ def generate_motion(params: MotionParams) -> MotionResult:
     Returns:
         MotionResult
     """
-    # Generate a motion draft using the LLM
-    motion_prompt = f"""
-    Draft a {params.motion_type} motion for the jurisdiction of {params.jurisdiction}.
-    The motion should include the following:
-    - Legal basis: {params.legal_basis}
-    - Key arguments: {', '.join(params.key_arguments)}
-    - Evidence IDs: {', '.join(params.evidence_ids)}
+    # Step 1: Research relevant precedents
+    precedents = find_precedents(
+        PrecedentQuery(
+            legal_issue=params.legal_basis,
+            jurisdiction=params.jurisdiction,
+            favorable=True,
+            key_facts=params.key_arguments,
+        )
+    )
 
-    Ensure the motion is formatted correctly and includes necessary citations.
+    # Step 2: Generate motion outline
+    outline_prompt = f"""
+    Create an outline for a {params.motion_type} motion in {params.jurisdiction} jurisdiction.
+
+    Legal Basis:
+    {params.legal_basis}
+
+    Key Arguments:
+    {', '.join(params.key_arguments)}
+
+    Relevant Precedents:
+    {', '.join([f"{p.case_name} ({p.citation})" for p in precedents])}
+
+    Provide the outline in a structured format with sections and bullet points.
     """
-    motion_text = llm.chat([{"role": "user", "content": motion_prompt}])
+    outline_response = llm.chat([{"role": "user", "content": outline_prompt}])
+    motion_outline = parse_outline(outline_response)
 
-    # Generate table of authorities and citations
-    authorities_prompt = f"""
-    Provide a table of authorities and evidence citations for the following motion:
+    # Step 3: Draft the motion using the outline
+    draft_prompt = f"""
+    Draft a full motion based on the following outline:
 
-    {motion_text}
+    {motion_outline}
+
+    Ensure the motion is persuasive, adheres to legal writing standards, and includes proper citations.
     """
-    authorities_result = llm.chat([{"role": "user", "content": authorities_prompt}])
+    motion_text = llm.chat([{"role": "user", "content": draft_prompt}])
 
-    # Perform weakness analysis and identify counter-arguments
+    # Step 4: Extract table of authorities and evidence citations
+    authorities, evidence_citations = extract_citations(motion_text)
+
+    # Step 5: Analyze weaknesses and counter-arguments
     analysis_prompt = f"""
-    Analyze the motion text for weaknesses and potential counter-arguments.
+    Analyze the drafted motion for potential weaknesses and counter-arguments.
 
     Motion Text:
     {motion_text}
-    """
-    analysis_result = llm.chat([{"role": "user", "content": analysis_prompt}])
 
-    # Parse results into the MotionResult data model
+    Provide:
+    - List of weaknesses with explanations
+    - Potential counter-arguments from the opposition
+    Provide the information in a structured format.
+    """
+    analysis_response = llm.chat([{"role": "user", "content": analysis_prompt}])
+    weakness_analysis = llm.structured_output(MotionResult)
+
     return MotionResult(
         motion_text=motion_text,
-        table_of_authorities=[],  # Parsing from authorities_result
-        evidence_citations=[],   # Parsing from authorities_result
-        counter_arguments=[],    # Parsing from analysis_result
-        weakness_analysis={},    # Parsing from analysis_result
+        table_of_authorities=authorities,
+        evidence_citations=evidence_citations,
+        counter_arguments=weakness_analysis.counter_arguments,
+        weakness_analysis=weakness_analysis.weakness_analysis,
     )
+
+
+def parse_outline(outline_response: str) -> str:
+    """
+    Parses the outline response into a structured format.
+
+    Args:
+        outline_response: Response from the LLM
+
+    Returns:
+        Structured outline
+    """
+    # Implement parsing logic
+    # For simplicity, return the response as-is in this example
+    return outline_response
+
+
+def extract_citations(motion_text: str) -> (List[Dict], List[Dict]):
+    """
+    Extracts the table of authorities and evidence citations from the motion text.
+
+    Args:
+        motion_text: The drafted motion text
+
+    Returns:
+        Tuple of table_of_authorities and evidence_citations
+    """
+    citation_prompt = f"""
+    From the following motion text, extract:
+
+    - Table of Authorities (list of all legal cases cited)
+    - Evidence Citations (list of all evidence referenced)
+
+    Motion Text:
+    {motion_text}
+
+    Provide the information in a structured JSON format.
+    """
+    citation_response = llm.chat([{"role": "user", "content": citation_prompt}])
+    citations = llm.structured_output(
+        {"authorities": List[Dict], "evidences": List[Dict]}
+    )
+    return citations["authorities"], citations["evidences"]
 
 
 @app.tool
@@ -278,33 +440,41 @@ def find_precedents(query: PrecedentQuery) -> List[PrecedentResult]:
     Returns:
         List[PrecedentResult]
     """
-    # Use the query to search the vector store
+    # Step 1: Formulate search query
     search_text = f"{query.legal_issue} {' '.join(query.key_facts)}"
+
+    # Step 2: Retrieve relevant documents from the vector store
     results = vector_store.get_text(
         query=search_text,
-        k=5,
-        filter=lambda text, metadata: metadata.get("jurisdiction") == query.jurisdiction,
+        k=10,
+        filter=lambda text, metadata: metadata.get("jurisdiction")
+        == query.jurisdiction,
     )
 
     precedent_results = []
-    for result in results:
-        # Analyze each result using the LLM
+    for result, metadata in results:
+        # Step 3: Analyze each result in detail
         analysis_prompt = f"""
-        Analyze the following case for relevance:
+        Analyze the following legal case for relevance:
 
+        Case Text:
         {result}
 
         Provide:
-        - Case name
+        - Case Name
         - Citation
-        - Relevance score (0 to 1)
-        - Key holdings
-        - Distinguishing factors
-        - Application analysis
+        - Relevance Score (0.0 to 1.0)
+        - Key Holdings
+        - Distinguishing Factors
+        - Application Analysis (how it applies to the current legal issue)
+        Provide the information in a structured JSON format.
         """
-        analysis_text = llm.chat([{"role": "user", "content": analysis_prompt}])
+        analysis_response = llm.chat([{"role": "user", "content": analysis_prompt}])
         precedent = llm.structured_output(PrecedentResult)
         precedent_results.append(precedent)
+
+    # Step 4: Rank precedents by relevance score
+    precedent_results.sort(key=lambda x: x.relevance_score, reverse=True)
 
     return precedent_results
 
@@ -320,36 +490,72 @@ def analyze_strategy(case_id: str) -> StrategyAnalysis:
     Returns:
         StrategyAnalysis
     """
-    # Gather case details and documents
+    # Gather case details and all related documents
     case_details = case_store[case_id]
-    documents = [
-        doc for doc in document_store.values() if doc.id in case_store[case_id].parties
-    ]
+    documents = fetch_case_documents(case_id)
 
-    # Compile analysis prompt
+    # Extract key points from documents
+    key_points = []
+    for doc in documents:
+        key_points.append(extract_key_points(doc))
+
+    # Compile analysis data
+    analysis_data = {
+        "case_details": case_details.model_dump(),
+        "key_points": key_points,
+    }
+
+    # Use LLM to perform a comprehensive strategy analysis
     analysis_prompt = f"""
-    Based on the following case details and documents, provide a strategic analysis:
+    Given the following case details and key points, provide a comprehensive strategy analysis.
 
     Case Details:
-    {case_details}
+    {analysis_data['case_details']}
 
-    Documents:
-    {', '.join(doc.content for doc in documents)}
+    Key Points:
+    {analysis_data['key_points']}
 
     The analysis should include:
     - Strengths
     - Weaknesses
-    - Evidence gaps
-    - Recommended actions
-    - Risk analysis
-    - Timeline issues
+    - Evidence Gaps
+    - Recommended Actions
+    - Risk Analysis
+    - Timeline Issues
+    Provide the information in a structured JSON format.
     """
-    analysis_result = llm.chat([{"role": "user", "content": analysis_prompt}])
+    analysis_response = llm.chat([{"role": "user", "content": analysis_prompt}])
 
     # Parse the result into StrategyAnalysis model
     strategy_analysis = llm.structured_output(StrategyAnalysis)
 
     return strategy_analysis
+
+
+def extract_key_points(doc: CaseDocument) -> Dict:
+    """
+    Extracts key points from a document.
+
+    Args:
+        doc: CaseDocument
+
+    Returns:
+        Dictionary of key points
+    """
+    key_points_prompt = f"""
+    Extract key points from the following document:
+
+    {doc.content}
+
+    Include:
+    - Main Arguments
+    - Evidence Presented
+    - Legal Issues
+    Provide the information in a structured JSON format.
+    """
+    key_points_response = llm.chat([{"role": "user", "content": key_points_prompt}])
+    key_points = llm.structured_output(Dict)
+    return key_points
 
 
 @app.tool
@@ -363,9 +569,9 @@ def generate_discovery(params: DiscoveryParams) -> List[DiscoveryRequest]:
     Returns:
         List[DiscoveryRequest]
     """
-    # Generate discovery requests using the LLM
-    discovery_prompt = f"""
-    Generate {params.discovery_type} requests related to the following legal issues:
+    # Step 1: Generate a list of potential discovery items
+    discovery_items_prompt = f"""
+    Based on the following legal issues and evidence gaps, list potential discovery requests.
 
     Legal Issues:
     {', '.join(params.legal_issues)}
@@ -373,12 +579,33 @@ def generate_discovery(params: DiscoveryParams) -> List[DiscoveryRequest]:
     Evidence Gaps:
     {', '.join(params.evidence_gaps)}
 
-    Provide detailed requests suitable for submission.
-    """
-    discovery_text = llm.chat([{"role": "user", "content": discovery_prompt}])
+    Discovery Type: {params.discovery_type}
 
-    # Parse the LLM's response into a list of DiscoveryRequest
-    discovery_requests = llm.structured_output(List[DiscoveryRequest])
+    Provide the list in bullet points.
+    """
+    discovery_items_response = llm.chat(
+        [{"role": "user", "content": discovery_items_prompt}]
+    )
+    discovery_items = discovery_items_response.strip().split("\n")
+
+    # Step 2: For each item, create a detailed DiscoveryRequest
+    discovery_requests = []
+    for item in discovery_items:
+        request_prompt = f"""
+        Draft a formal {params.discovery_type} request for the following item:
+
+        {item}
+
+        Include:
+        - Request Text
+        - Legal Basis
+        - Target Evidence
+        - Strategic Purpose
+        Provide the information in a structured JSON format.
+        """
+        request_response = llm.chat([{"role": "user", "content": request_prompt}])
+        discovery_request = llm.structured_output(DiscoveryRequest)
+        discovery_requests.append(discovery_request)
 
     return discovery_requests
 
