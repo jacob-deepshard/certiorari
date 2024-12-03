@@ -1,163 +1,86 @@
-Name: "CERTIORARI" (Court Evidence & Research Tool for Intelligent Organization, Reasoning, And Response Integration)
+# CERTIORARI: Court Evidence & Research Tool for Intelligent Organization, Reasoning, And Response Integration
 
-Primary flows:
-1. Case Initialization
-- Upload case documents 
-- Initial document analysis
-- Timeline construction
+> *CERTIORARI is an example app for the truffle agent to invoke tools as grpc endpoints. Feel free to use it as a starting point for your own project! See [Modifying this template](#modifying-this-template) for more information.*
 
-2. Motion Generation
-- Evidence analysis
-- Precedent search
-- Draft generation
-- Counter-argument analysis
+## Overview
 
-3. Strategy Development
-- Weakness identification
-- Supporting case law search
-- Argument strength scoring
+CERTIORARI is an AI-powered legal strategy and motion development system designed to assist legal professionals in developing comprehensive legal strategies while maintaining privilege and work product protection. It orchestrates various tools that process information privately and maintain chain-of-thought reasoning, integrating seamlessly through a rich data schema.
 
-Tools:
+## Features
 
-```python
-@dataclass
-class CertiorariMetadata(truffle.AppMetadata):
-    name = "certiorari"
-    description = "AI-powered legal strategy and motion development system"
-    goal = "develop winning legal strategies through secure document analysis"
+- **Case Initialization**: Create new case workspaces with essential details.
+- **Document Processing**: Analyze legal documents to extract key facts, dates, legal issues, evidence points, and relationships.
+- **Timeline Construction**: Build comprehensive case timelines, detect causation chains, and identify gaps or conflicts.
+- **Motion Generation**: Draft motions with citations, including outlines, tables of authorities, and weakness analysis.
+- **Precedent Search**: Find relevant case law to support legal arguments.
+- **Strategy Analysis**: Evaluate case strategies, identifying strengths, weaknesses, and recommended actions.
+- **Discovery Request Generation**: Create detailed discovery requests tailored to the case's needs.
+- **Opposition Analysis**: Analyze opposing counsel's strategies and past cases.
+- **Outcome Prediction**: Predict potential case outcomes with risk assessments and contingency plans.
+- **Client Communication**: Generate drafts for client communications, including next steps and scheduling.
+- **Research Summarization**: Summarize legal research into key points, important cases, and statutory references.
+- **Document Comparison**: Compare documents to find differences and similarities.
+- **Scheduling**: Manage scheduling of important case events with reminders.
+- **Risk Assessment**: Assess legal and non-legal risks associated with the case.
 
-class Certiorari:
-    def __init__(self):
-        self.case_id = None
-        self.document_store = {}
-        
-    @truffle.tool
-    def InitializeCase(self, case_details: Dict) -> str:
-        """
-        Creates new case workspace
-        Args:
-            case_details: {
-                "case_name": str,
-                "jurisdiction": str,
-                "case_type": str,
-                "parties": List[str]
-            }
-        Returns:
-            case_id: Unique identifier for case
-        """
-        
-    @truffle.tool
-    def ProcessDocument(self, doc_content: str, metadata: Dict) -> Dict:
-        """
-        Analyzes legal document and extracts key information
-        Args:
-            doc_content: Document text
-            metadata: {
-                "doc_type": str,  # deposition|exhibit|filing|correspondence
-                "date": str,
-                "author": str,
-                "recipients": List[str]
-            }
-        Returns: {
-            "key_facts": List[Dict],
-            "dates": List[Dict],
-            "legal_issues": List[Dict],
-            "evidence_points": List[Dict],
-            "relationships": List[Dict]
-        }
-        """
+## Running the App
 
-    @truffle.tool
-    def ConstructTimeline(self, case_id: str) -> Dict:
-        """
-        Builds comprehensive case timeline
-        Args:
-            case_id: Case identifier
-        Returns: {
-            "timeline": List[Dict],  # Chronological events
-            "causation_chains": List[Dict],  # Related event sequences
-            "gaps": List[Dict],  # Missing evidence periods
-            "conflicts": List[Dict]  # Contradictory evidence
-        }
-        """
+### On the Truffle Computer
 
-    @truffle.tool
-    def GenerateMotion(self, params: Dict) -> Dict:
-        """
-        Creates motion draft with citations
-        Args:
-            params: {
-                "motion_type": str,
-                "legal_basis": str,
-                "key_arguments": List[str],
-                "evidence_ids": List[str],
-                "jurisdiction": str
-            }
-        Returns: {
-            "motion_text": str,
-            "table_of_authorities": List[Dict],
-            "evidence_citations": List[Dict],
-            "counter_arguments": List[Dict],
-            "weakness_analysis": Dict
-        }
-        """
+1. Click the `+` button in the top right of the truffle computer interface and select `Add App`
+2. Search for `certiorari` and select it
+3. Type a prompt like `My client is suing me for $100,000. What should I do?` and start!
 
-    @truffle.tool
-    def FindPrecedents(self, query: Dict) -> List[Dict]:
-        """
-        Searches relevant case law
-        Args:
-            query: {
-                "legal_issue": str,
-                "jurisdiction": str,
-                "favorable": bool,  # Search for supporting/opposing
-                "key_facts": List[str]
-            }
-        Returns:
-            List[{
-                "case_name": str,
-                "citation": str,
-                "relevance_score": float,
-                "key_holdings": List[str],
-                "distinguishing_factors": List[str],
-                "application_analysis": str
-            }]
-        """
+### On Your Local Machine
 
-    @truffle.tool
-    def AnalyzeStrategy(self, case_id: str) -> Dict:
-        """
-        Evaluates case strategy holistically
-        Args:
-            case_id: Case identifier
-        Returns: {
-            "strengths": List[Dict],
-            "weaknesses": List[Dict],
-            "evidence_gaps": List[Dict],
-            "recommended_actions": List[Dict],
-            "risk_analysis": Dict,
-            "timeline_issues": List[Dict]
-        }
-        """
+1. Clone the repo and install dependencies
+2. Run `python -m certiorari` to start the app server
+3. Follow the instructions in the truffle computer section above
 
-    @truffle.tool
-    def GenerateDiscovery(self, params: Dict) -> List[Dict]:
-        """
-        Creates discovery requests
-        Args:
-            params: {
-                "discovery_type": str,  # interrogatories|production|admission
-                "legal_issues": List[str],
-                "evidence_gaps": List[str]
-            }
-        Returns:
-            List[{
-                "request_text": str,
-                "legal_basis": str,
-                "target_evidence": str,
-                "strategic_purpose": str
-            }]
-        """
+## Modifying this Template
+
+So this is just a starting point for you to make your own Truffle Apps. Here's the idea:
+
+- you make tools in the `certiorari/actions.py` file
+- you make the schema in the `certiorari/schema.py` file
+
+So your project structure should look like this:
+
+```
+certiorari/
+├── README.md
+├── certiorari
+│   ├── __main__.py
+│   ├── actions.py
+│   ├── app.py
+│   ├── schema.py
+│   └── utils.py
+├── pyproject.toml
+├── tests
+│   └── __init__.py
+...
 ```
 
-Each tool processes privately, maintains chain-of-thought reasoning, and integrates with others through the case_id reference. The AGI orchestrates these tools to develop comprehensive legal strategies while maintaining privilege and work product protection.
+but obviously modifying the names to be relevant to your project.
+
+## Running the Tests
+
+We have code tests and agent tests.
+
+- WIP
+
+## Contributing
+
+Fork, code, [PR](https://github.com/jacob-deepshard/certiorari/pulls). Use `feature/your-branch-name` for your branch name.
+
+## License
+
+[`MIT LICENSE`](LICENSE)
+
+## Contact
+
+For questions or support, please contact **[jacob@deepshard.org](mailto:jacob@deepshard.org)**.
+
+---
+
+**Note**: This project is intended for legal professionals and organizations to streamline legal strategy development and document analysis. Users should ensure compliance with all applicable laws and professional standards when utilizing this tool.
