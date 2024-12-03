@@ -90,20 +90,31 @@ def process_document(
 
     # Step 2: Extract entities and relationships using the LLM
     extraction_prompt = f"""
-You are an AI legal assistant. Analyze the following legal document and extract detailed information.
+You are an AI legal assistant with expertise in legal document analysis. Thoroughly analyze the following legal document and extract detailed information with high accuracy. Focus on identifying all relevant legal elements, using precise legal terminology.
 
 Document:
 {preprocessed_content}
 
-Extract the following in JSON format according to the ProcessedDocument schema:
+Extract the following information in JSON format according to the `ProcessedDocument` schema:
 {{
-    "key_facts": [...],
-    "dates": [...],
-    "legal_issues": [...],
-    "evidence_points": [...],
-    "relationships": [...]
+    "key_facts": ["..."],  # Critical facts that are central to the case
+    "dates": ["YYYY-MM-DD", "..."],  # All relevant dates in ISO 8601 format
+    "legal_issues": ["..."],  # Specific legal issues or questions presented
+    "evidence_points": ["..."],  # Key pieces of evidence mentioned
+    "relationships": ["..."]  # Relationships between parties or entities
 }}
-Ensure that the output strictly adheres to the schema and use ISO 8601 format for dates.
+
+Examples:
+- Key Facts: ["The defendant was observed at the crime scene.", "A contract was signed on the specified date."]
+- Legal Issues: ["Breach of contract", "Negligence", "Intellectual property infringement"]
+- Evidence Points: ["Fingerprint analysis report", "Email correspondence between parties"]
+- Relationships: ["Supplier-client relationship between Company A and Company B"]
+
+Ensure that:
+- All extracted information is accurate and uses appropriate legal terminology.
+- Dates are in ISO 8601 format (YYYY-MM-DD).
+- The output strictly adheres to the `ProcessedDocument` schema.
+- Include citations or references within the document if applicable.
 """
     extraction_response = llm.chat([{"role": "user", "content": extraction_prompt}])
 
@@ -220,19 +231,25 @@ def extract_events_from_document(doc: CaseDocument) -> List[CaseTimelineEvent]:
         List of CaseTimelineEvent
     """
     event_prompt = f"""
-You are an AI assistant extracting events from legal documents. From the following document, extract all events with dates.
+You are an AI assistant specializing in legal document analysis. From the following document, extract all significant legal events along with their associated dates. Events may include filings, court decisions, motions, hearings, or any other legally relevant actions.
 
 Document:
 {doc.content}
 
-For each event, provide a JSON object according to the CaseTimelineEvent schema:
+For each event, provide a JSON object according to the `CaseTimelineEvent` schema:
 {{
-    "id": "<UUID>",
-    "created_at": "<datetime>",
-    "date": "<YYYY-MM-DD>",
-    "description": "<event description>"
+    "id": "<UUID>",  # Generated unique identifier for the event
+    "created_at": "<datetime>",  # Timestamp of extraction
+    "date": "<YYYY-MM-DD>",  # Date of the event in ISO 8601 format
+    "description": "<event description>"  # Concise summary of the event
 }}
-Ensure dates are in ISO 8601 format (YYYY-MM-DD) and generate unique UUIDs for each event.
+
+Guidelines:
+- Focus on events that have legal significance to the case.
+- If multiple dates are associated with an event, choose the most legally relevant one, and mention others in the description if necessary.
+- Summarize event descriptions effectively, emphasizing key details.
+- Ensure consistency in date formats and be mindful of time zones if specified.
+- Generate unique UUIDs for each event.
 """
     event_response = llm.chat([{"role": "user", "content": event_prompt}])
 
@@ -259,17 +276,23 @@ def detect_causation_chains(events: List[CaseTimelineEvent]) -> List[Dict]:
     events_text = '\n'.join([f"{event.date}: {event.description}" for event in events])
 
     causation_prompt = f"""
-You are an AI legal analyst. Analyze the following chronological list of events and identify any causation chains.
+You are an AI legal analyst. Analyze the following chronological list of events to identify causation chains, distinguishing between causation (where one event directly causes another) and mere correlation.
 
 Events:
 {events_text}
 
 For each causation chain, provide a JSON object:
 {{
-    "chain_events": ["<event_id1>", "<event_id2>", ...],
-    "description": "Explanation of the causation chain and how events are connected"
+    "chain_events": ["<event_id1>", "<event_id2>", ...],  # Ordered list of event IDs involved in the causation chain
+    "description": "Detailed explanation of how each event leads to the next and their legal significance."
 }}
-Ensure that event IDs correspond to the events provided.
+
+Guidelines:
+- Focus on legally significant causal relationships between events.
+- Provide detailed explanations, citing how each event influences subsequent events.
+- Include considerations of legal causation, such as proximate cause and foreseeability.
+- Use examples where appropriate to illustrate causal links in a legal context.
+- Ensure that event IDs correspond accurately to the provided events.
 """
     causation_response = llm.chat([{"role": "user", "content": causation_prompt}])
 
@@ -334,19 +357,45 @@ def generate_motion(params: MotionParams) -> MotionResult:
 
     # Step 2: Generate motion outline using LLM with structured output
     outline_prompt = f"""
-    You are an AI legal assistant tasked with drafting a motion. Create a detailed outline for a {params.motion_type} motion in the {params.jurisdiction} jurisdiction.
+You are an AI legal assistant tasked with drafting a motion. Create a detailed outline for a {params.motion_type} motion in the {params.jurisdiction} jurisdiction, adhering to the jurisdiction's specific guidelines and formatting requirements.
 
-    Legal Basis:
-    {params.legal_basis}
+Legal Basis:
+{params.legal_basis}
 
-    Key Arguments:
-    {', '.join(params.key_arguments)}
+Key Arguments:
+{', '.join(params.key_arguments)}
 
-    Relevant Precedents:
-    {', '.join([f"{p.case_name} ({p.citation})" for p in precedents])}
+Relevant Precedents:
+{', '.join([f"{p.case_name} ({p.citation})" for p in precedents])}
 
-    Provide the outline in JSON format with sections and bullet points, adhering to legal standards.
-    """
+The outline should include the following sections, as required by {params.jurisdiction} jurisdiction:
+- Introduction
+- Statement of Facts
+- Legal Standard
+- Argument
+  - Section headings reflecting key arguments
+  - Integration of relevant precedents
+- Conclusion
+
+Guidelines:
+- Craft compelling headings and subheadings that enhance the persuasiveness of the motion.
+- Clearly indicate where key arguments will be placed and how they support the legal basis.
+- Show how relevant precedents will be integrated into the arguments.
+- Ensure adherence to legal formatting and use persuasive language appropriate for the motion.
+- Provide the outline in JSON format with sections and bullet points.
+
+Example:
+{{
+  "Introduction": ["Brief introduction to the motion and its purpose."],
+  "Statement of Facts": ["Fact 1", "Fact 2", "..."],
+  "Legal Standard": ["Description of the legal standards applicable."],
+  "Argument": {{
+    "Heading 1": ["Point 1", "Point 2"],
+    "Heading 2": ["Point 1", "Point 2"]
+  }},
+  "Conclusion": ["Summarize the arguments and state the requested relief."]
+}}
+"""
     outline_response = llm.chat([{"role": "user", "content": outline_prompt}])
     try:
         motion_outline = llm.structured_output(Dict)
@@ -355,13 +404,18 @@ def generate_motion(params: MotionParams) -> MotionResult:
 
     # Step 3: Draft the motion using the outline
     draft_prompt = f"""
-    Based on the following outline, draft a complete motion:
+Using the following outline, draft a complete {params.motion_type} motion suitable for filing in {params.jurisdiction} jurisdiction. The motion should be persuasive, professionally written, and adhere to all local court rules.
 
-    Outline:
-    {motion_outline}
+Outline:
+{motion_outline}
 
-    Ensure the motion is persuasive, follows legal writing standards for {params.jurisdiction}, and includes proper citations in Bluebook format.
-    """
+Guidelines:
+- Utilize a formal and persuasive tone appropriate for legal documents.
+- Employ persuasive legal argumentation techniques, such as citing authoritative cases and statutes.
+- Ensure all citations and references are accurate and formatted according to Bluebook standards.
+- Strengthen arguments with relevant facts, evidence, and logical reasoning.
+- Review the motion for clarity, coherence, and legal sufficiency.
+"""
     motion_text = llm.chat([{"role": "user", "content": draft_prompt}])
 
     # Step 4: Extract table of authorities and evidence citations
@@ -464,21 +518,27 @@ def find_precedents(query: PrecedentQuery) -> List[PrecedentResult]:
     for result_text, metadata in results:
         # Analyze each result in detail
         analysis_prompt = f"""
-You are an AI legal assistant analyzing case law. Given the following legal case, provide an analysis in JSON format according to the PrecedentResult schema.
+You are an AI legal assistant analyzing case law to support a legal issue. Given the following legal case, provide a comprehensive analysis in JSON format according to the `PrecedentResult` schema.
 
 Case Text:
 {result_text}
 
-PrecedentResult schema:
+`PrecedentResult` schema:
 {{
-    "case_name": "<case name>",
-    "citation": "<citation>",
-    "relevance_score": <float between 0.0 and 1.0>,
-    "key_holdings": ["<holding1>", "<holding2>", ...],
-    "distinguishing_factors": ["<factor1>", "<factor2>", ...],
-    "application_analysis": "<how it applies to the current legal issue>"
+    "case_name": "<case name>",  # Accurate full name of the case
+    "citation": "<citation>",  # Official legal citation
+    "relevance_score": <float between 0.0 and 1.0>,  # Evaluate how relevant the case is to the current issue
+    "key_holdings": ["<holding1>", "<holding2>", ...],  # Major legal principles established
+    "distinguishing_factors": ["<factor1>", "<factor2>", ...],  # Differences from the current case that may limit applicability
+    "application_analysis": "<Detailed analysis of how this case applies to the current legal issue>"
 }}
-Ensure that all fields are correctly filled.
+
+Guidelines:
+- Provide an in-depth analysis of key holdings and their legal implications.
+- Assess relevance by considering similarities in facts, legal issues, and jurisdiction.
+- Identify distinguishing factors that might affect the precedent's applicability.
+- Evaluate how the precedent supports or undermines the current case.
+- Ensure accuracy in the case name and citation.
 """
         analysis_response = llm.chat([{"role": "user", "content": analysis_prompt}])
 
@@ -527,7 +587,7 @@ def analyze_strategy(case_id: str) -> StrategyAnalysis:
 
     # LLM Strategy Analysis
     analysis_prompt = f"""
-You are a legal strategist. Based on the following case details and key points, provide a comprehensive strategy analysis.
+You are a legal strategist tasked with providing a comprehensive analysis for the following case.
 
 Case Details:
 {analysis_data['case_details']}
@@ -535,15 +595,21 @@ Case Details:
 Key Points:
 {analysis_data['key_points']}
 
-The analysis should include:
-- Strengths
-- Weaknesses
-- Evidence Gaps
-- Recommended Actions
-- Risk Analysis
-- Timeline Issues
+Your analysis should include:
 
-Provide the analysis in JSON format according to the StrategyAnalysis schema.
+- **Strengths**: Assess the case's strong points, such as compelling evidence or favorable precedents.
+- **Weaknesses**: Identify vulnerabilities, including weak arguments or problematic evidence.
+- **Evidence Gaps**: Highlight any missing information or evidence that could be crucial.
+- **Recommended Actions**: Propose actionable steps to strengthen the case, with clear rationales.
+- **Risk Analysis**: Evaluate legal and practical risks, considering likelihood and potential impact.
+- **Timeline Issues**: Identify any concerns related to timing, such as statute of limitations or scheduling conflicts.
+
+Guidelines:
+- Use analytical frameworks to systematically assess strengths and weaknesses.
+- Provide practical solutions for evidence gaps, such as obtaining expert testimony or additional documents.
+- Recommendations should be specific, feasible, and legally sound.
+- Include risk mitigation strategies to address identified risks.
+- Ensure the analysis is thorough, objective, and well-structured, adhering to the `StrategyAnalysis` schema.
 """
     analysis_response = llm.chat([{"role": "user", "content": analysis_prompt}])
 
@@ -567,17 +633,24 @@ def extract_key_points(doc: CaseDocument) -> Dict:
         Dictionary of key points
     """
     key_points_prompt = f"""
-You are an AI assistant extracting key points from legal documents.
+You are an AI assistant specializing in legal document analysis. From the following document, extract key points accurately.
 
 Document:
 {doc.content}
 
 Extract and provide the following in JSON format:
 {{
-    "main_arguments": ["<argument1>", "<argument2>", ...],
-    "evidence_presented": ["<evidence1>", "<evidence2>", ...],
-    "legal_issues": ["<issue1>", "<issue2>", ...]
+    "main_arguments": ["<argument1>", "<argument2>", ...],  # Primary assertions or claims made
+    "evidence_presented": ["<evidence1>", "<evidence2>", ...],  # All significant pieces of evidence cited
+    "legal_issues": ["<issue1>", "<issue2>", ...]  # Legal questions or disputes addressed
 }}
+
+Guidelines:
+- Differentiate between main arguments (central claims) and supporting points (details that bolster arguments).
+- Ensure all relevant evidence is captured, including exhibits, witness statements, and expert reports.
+- Identify both explicit and implicit legal issues, even those not directly stated.
+- Cross-verify extracted points against the document to ensure completeness and accuracy.
+- Use precise legal terminology where appropriate.
 """
     key_points_response = llm.chat([{"role": "user", "content": key_points_prompt}])
 
@@ -602,16 +675,28 @@ def generate_discovery(params: DiscoveryParams) -> List[DiscoveryRequest]:
     """
     # Step 1: Generate potential discovery items
     discovery_items_prompt = f"""
-    You are a legal expert in {params.jurisdiction} jurisdiction. Based on the following legal issues and evidence gaps, list potential {params.discovery_type} requests:
+You are a legal expert in the {params.jurisdiction} jurisdiction. Based on the following legal issues and evidence gaps, list all potential {params.discovery_type} requests that could be made to obtain necessary information.
 
-    Legal Issues:
-    {', '.join(params.legal_issues)}
+Legal Issues:
+{', '.join(params.legal_issues)}
 
-    Evidence Gaps:
-    {', '.join(params.evidence_gaps)}
+Evidence Gaps:
+{', '.join(params.evidence_gaps)}
 
-    Provide the list in JSON format as an array of discovery items.
-    """
+Guidelines:
+- Provide a comprehensive list covering all possible discovery items relevant to the case.
+- Tailor each request to comply with {params.jurisdiction}'s discovery rules and procedural requirements.
+- Prioritize requests based on their strategic importance to the case outcome.
+- Ensure that each proposed request is ethically appropriate and does not violate any legal standards.
+- Present the list in JSON format as an array of discovery items.
+
+Example:
+[
+    "Request for production of documents related to...",
+    "Interrogatories regarding...",
+    "Deposition of..."
+]
+"""
     discovery_items_response = llm.chat([{"role": "user", "content": discovery_items_prompt}])
     try:
         discovery_items = llm.structured_output(List[str])
@@ -657,15 +742,25 @@ def analyze_opposition(opposition_details: OppositionDetails) -> OppositionAnaly
     """
     # Compile information about the opposing counsel
     analysis_prompt = f"""
-    Analyze the strategies and weaknesses of the opposing counsel, {opposition_details.opposing_counsel}, based on their past cases:
+You are tasked with analyzing the strategies and weaknesses of opposing counsel, {opposition_details.opposing_counsel}, based on their past cases.
 
-    Past Cases:
-    {', '.join(opposition_details.past_cases)}
+Past Cases:
+{', '.join(opposition_details.past_cases)}
 
-    Provide:
-    - Common strategies used
-    - Notable weaknesses or patterns
-    """
+Guidelines:
+- Research and summarize the opposing counsel's litigation history, focusing on {opposition_details.past_cases}.
+- Identify common strategies they employ, such as aggressive motions practice, settlement tendencies, or reliance on specific legal arguments.
+- Detect any notable weaknesses or patterns, such as recurring procedural errors, overreliance on certain precedents, or jury reactions.
+- Consider how these patterns can be ethically leveraged in our case strategy.
+- Emphasize maintaining professional responsibility and adherence to ethical standards in your analysis.
+
+Provide your findings in the following format:
+{{
+    "common_strategies": ["..."],  # List of strategies frequently used by the opposing counsel
+    "notable_weaknesses": ["..."],  # Identified weaknesses or patterns
+    "recommendations": ["..."]  # Suggestions for leveraging this information ethically
+}}
+"""
     analysis_result = llm.chat([{"role": "user", "content": analysis_prompt}])
 
     # Parse the result into OppositionAnalysis model
@@ -693,20 +788,31 @@ def predict_case_outcome(case_id: str) -> CaseOutcomePrediction:
 
     # Use LLM to predict outcome
     prediction_prompt = f"""
-    Based on the following case details and documents, predict the outcome:
+You are an AI legal analyst. Based on the following case details and documents, provide a reasoned prediction of the case outcome.
 
-    Case Details:
-    {case_details}
+Case Details:
+{case_details}
 
-    Documents:
-    {', '.join(doc.content for doc in documents)}
+Documents:
+{', '.join(doc.content for doc in documents)}
 
-    Provide:
-    - Likelihood of success (as a percentage)
-    - Potential awards
-    - Key factors influencing the outcome
-    - Risk factors
-    """
+Guidelines:
+- Assess the likelihood of success as a percentage, considering legal precedents, strength of evidence, and applicable laws.
+- Evaluate potential awards or remedies that may be granted if successful.
+- Identify key factors influencing the outcome, including factual and legal elements.
+- Analyze risk factors such as unfavorable precedents, legal hurdles, or external influences (e.g., judge or jury tendencies).
+- Transparently explain the reasoning behind your predictions.
+- Consider alternative outcomes and suggest contingency plans where appropriate.
+
+Provide your prediction in the following format:
+{{
+    "likelihood_of_success": "<percentage>",
+    "potential_awards": ["..."],
+    "key_factors": ["..."],
+    "risk_factors": ["..."],
+    "contingency_plans": ["..."]
+}}
+"""
     prediction_result = llm.chat([{"role": "user", "content": prediction_prompt}])
 
     # Parse the result into CaseOutcomePrediction model
@@ -734,13 +840,20 @@ def generate_client_communication(
 
     # Generate communication using LLM
     communication_prompt = f"""
-    Draft a {communication_params.preferred_method} to {client_details['name']} with the following:
+    Draft a {communication_params.preferred_method} to {client_details['name']}.
 
     Subject: {communication_params.subject}
-    Message: {communication_params.message}
-    Urgency Level: {communication_params.urgency_level}
 
-    Include any next steps and offer to schedule meetings if necessary.
+    Message:
+    {communication_params.message}
+
+    Guidelines:
+    - Use clear and empathetic language tailored to the client's level of legal understanding.
+    - Begin with a summary of the key points to ensure clarity.
+    - Clearly outline any necessary actions the client must take.
+    - Adjust the tone based on the urgency level ({communication_params.urgency_level}), ensuring it's appropriate and professional.
+    - Include instructions for confirming receipt and offer options for follow-up or scheduling a meeting.
+    - Conclude with contact information and an invitation for the client to reach out with questions.
     """
     communication_text = llm.chat([{"role": "user", "content": communication_prompt}])
 
@@ -773,11 +886,18 @@ def summarize_legal_research(doc_content: str) -> ResearchSummary:
     """
     # Use LLM to summarize the document
     summary_prompt = f"""
-    Summarize the following legal document into key points, including important cases and statutory references:
+You are an AI assistant tasked with summarizing legal documents. Summarize the following document into key points, focusing on important cases, statutory references, and their implications.
 
-    Document:
-    {doc_content}
-    """
+Document:
+{doc_content}
+
+Guidelines:
+- Effectively condense complex legal information into clear, concise key points.
+- Identify and highlight significant cases and statutes, explaining their relevance.
+- Maintain accuracy and avoid omitting critical information.
+- Organize the summary logically, grouping related points together.
+- Use bullet points or numbered lists for clarity.
+"""
     summary_result = llm.chat([{"role": "user", "content": summary_prompt}])
 
     # Parse the result into ResearchSummary model
@@ -804,18 +924,29 @@ def compare_documents(doc_id_1: str, doc_id_2: str) -> DocumentComparison:
 
     # Use LLM to compare documents
     compare_prompt = f"""
-    Compare the following two documents and identify:
+You are tasked with comparing two legal documents to identify similarities and differences.
 
-    - Identical sections
-    - Differing sections
-    - Overall analysis
+Document 1:
+{doc1.content}
 
-    Document 1:
-    {doc1.content}
+Document 2:
+{doc2.content}
 
-    Document 2:
-    {doc2.content}
-    """
+Guidelines:
+- Perform a systematic side-by-side analysis of the documents.
+- Identify identical sections, including wording, structure, and citations.
+- Highlight substantive differences, such as variations in arguments, facts, or legal reasoning.
+- Note minor differences that may impact interpretation.
+- Assess the legal significance of the identified similarities and differences.
+- Present the comparison results clearly and logically, using headings or tables where appropriate.
+
+Provide your analysis in the following format:
+{{
+    "identical_sections": ["..."],
+    "differing_sections": ["..."],
+    "overall_analysis": "..."
+}}
+"""
     comparison_result = llm.chat([{"role": "user", "content": compare_prompt}])
 
     # Parse the result into DocumentComparison model
@@ -840,12 +971,29 @@ def schedule_case_events(case_id: str) -> Schedule:
 
     # Schedule events and set reminders
     schedule_prompt = f"""
-    Based on the following case events, create a schedule with reminders and deadlines:
+    Based on the following case events, create a detailed schedule with all relevant deadlines, hearings, and filings.
 
     Events:
     {', '.join(f"{event.date}: {event.description}" for event in events)}
 
-    Provide the schedule in a structured format.
+    Guidelines:
+    - Include all pertinent dates and deadlines, ensuring none are overlooked.
+    - Set reminders with appropriate lead times before each event (e.g., 7 days, 24 hours).
+    - Synchronize the schedule with calendar systems and comply with any legal or court-mandated timelines.
+    - Consider time zone differences and ensure all stakeholders are aware of event times.
+    - Present the schedule in a structured format, such as a table or list, including dates, event descriptions, and reminder times.
+
+    Provide the schedule in the following format:
+    {{
+        "schedule": [
+            {{
+                "date": "<YYYY-MM-DD>",
+                "event": "<description>",
+                "reminders": ["<reminder1>", "<reminder2>", ...]
+            }},
+            ...
+        ]
+    }}
     """
     schedule_result = llm.chat([{"role": "user", "content": schedule_prompt}])
 
@@ -871,16 +1019,30 @@ def assess_risks(case_id: str) -> RiskAssessment:
 
     # Use LLM to assess risks
     risk_prompt = f"""
-    Assess the risks associated with the following case:
+    You are an AI legal analyst. Assess the risks associated with the following case.
 
     Case Details:
     {case_details}
 
-    Provide:
-    - Identified risks
-    - Probability levels (high, medium, low)
-    - Impact assessment
-    - Mitigation plan
+    Guidelines:
+    - Identify both legal risks (e.g., unfavorable precedents, procedural issues) and non-legal risks (e.g., reputational damage, financial implications).
+    - For each risk, assign a probability level (high, medium, low) based on available data.
+    - Assess the potential impact of each risk on the case outcome and client interests.
+    - Propose realistic and actionable mitigation plans for each identified risk.
+    - Document and justify all assessments clearly.
+
+    Provide your assessment in the following format:
+    {{
+        "identified_risks": [
+            {{
+                "risk": "<description>",
+                "probability": "<high/medium/low>",
+                "impact": "<assessment>",
+                "mitigation_plan": "<plan>"
+            }},
+            ...
+        ]
+    }}
     """
     risk_result = llm.chat([{"role": "user", "content": risk_prompt}])
 
