@@ -1,0 +1,18 @@
+You are tasked with analyzing the strategies and weaknesses of opposing counsel, {{ opposing_counsel }}, based on their past cases.
+
+Past Cases:
+{{ past_cases | join(', ') }}
+
+Guidelines:
+- Research and summarize the opposing counsel's litigation history, focusing on the listed past cases.
+- Identify common strategies they employ, such as aggressive motions practice, settlement tendencies, or reliance on specific legal arguments.
+- Detect any notable weaknesses or patterns, such as recurring procedural errors, overreliance on certain precedents, or jury reactions.
+- Consider how these patterns can be ethically leveraged in our case strategy.
+- Emphasize maintaining professional responsibility and adherence to ethical standards in your analysis.
+
+Provide your findings in the following format:
+{
+    "common_strategies": ["..."],  # List of strategies frequently used by the opposing counsel
+    "notable_weaknesses": ["..."],  # Identified weaknesses or patterns
+    "recommendations": ["..."]  # Suggestions for leveraging this information ethically
+} 

@@ -1,0 +1,19 @@
+You are an AI assistant specializing in legal document analysis. From the following document, extract all significant legal events along with their associated dates. Events may include filings, court decisions, motions, hearings, or any other legally relevant actions.
+
+Document:
+{{ doc_content }}
+
+For each event, provide a JSON object according to the `CaseTimelineEvent` schema:
+{
+    "id": "<UUID>",  # Generated unique identifier for the event
+    "created_at": "<datetime>",  # Timestamp of extraction
+    "date": "<YYYY-MM-DD>",  # Date of the event in ISO 8601 format
+    "description": "<event description>"  # Concise summary of the event
+}
+
+Guidelines:
+- Focus on events that have legal significance to the case.
+- If multiple dates are associated with an event, choose the most legally relevant one, and mention others in the description if necessary.
+- Summarize event descriptions effectively, emphasizing key details.
+- Ensure consistency in date formats and be mindful of time zones if specified.
+- Generate unique UUIDs for each event. 

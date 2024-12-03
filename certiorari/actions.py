@@ -2,6 +2,7 @@ from typing import List
 import uuid
 from datetime import datetime
 from typing import Dict
+from jinja2 import Environment, FileSystemLoader
 
 from certiorari.app import app
 from certiorari.schema import (
@@ -41,6 +42,9 @@ vector_store = VectorStore()
 case_store: dict[str, CaseDetails] = {}
 document_store: dict[str, CaseDocument] = {}
 timeline_event_store: dict[str, List[CaseTimelineEvent]] = {}
+
+# Set up Jinja2 environment
+env = Environment(loader=FileSystemLoader('templates'))
 
 
 @app.tool
@@ -89,33 +93,10 @@ def process_document(
     preprocessed_content = preprocess_document(doc_content)
 
     # Step 2: Extract entities and relationships using the LLM
-    extraction_prompt = f"""
-You are an AI legal assistant with expertise in legal document analysis. Thoroughly analyze the following legal document and extract detailed information with high accuracy. Focus on identifying all relevant legal elements, using precise legal terminology.
+    # Load and render the Jinja template
+    template = env.get_template('process_document_extraction_prompt.j2')
+    extraction_prompt = template.render(preprocessed_content=preprocessed_content)
 
-Document:
-{preprocessed_content}
-
-Extract the following information in JSON format according to the `ProcessedDocument` schema:
-{{
-    "key_facts": ["..."],  # Critical facts that are central to the case
-    "dates": ["YYYY-MM-DD", "..."],  # All relevant dates in ISO 8601 format
-    "legal_issues": ["..."],  # Specific legal issues or questions presented
-    "evidence_points": ["..."],  # Key pieces of evidence mentioned
-    "relationships": ["..."]  # Relationships between parties or entities
-}}
-
-Examples:
-- Key Facts: ["The defendant was observed at the crime scene.", "A contract was signed on the specified date."]
-- Legal Issues: ["Breach of contract", "Negligence", "Intellectual property infringement"]
-- Evidence Points: ["Fingerprint analysis report", "Email correspondence between parties"]
-- Relationships: ["Supplier-client relationship between Company A and Company B"]
-
-Ensure that:
-- All extracted information is accurate and uses appropriate legal terminology.
-- Dates are in ISO 8601 format (YYYY-MM-DD).
-- The output strictly adheres to the `ProcessedDocument` schema.
-- Include citations or references within the document if applicable.
-"""
     extraction_response = llm.chat([{"role": "user", "content": extraction_prompt}])
 
     # Step 3: Parse the response into ProcessedDocument
@@ -230,27 +211,10 @@ def extract_events_from_document(doc: CaseDocument) -> List[CaseTimelineEvent]:
     Returns:
         List of CaseTimelineEvent
     """
-    event_prompt = f"""
-You are an AI assistant specializing in legal document analysis. From the following document, extract all significant legal events along with their associated dates. Events may include filings, court decisions, motions, hearings, or any other legally relevant actions.
+    # Load and render the Jinja template
+    template = env.get_template('extract_events_from_document_prompt.j2')
+    event_prompt = template.render(doc_content=doc.content)
 
-Document:
-{doc.content}
-
-For each event, provide a JSON object according to the `CaseTimelineEvent` schema:
-{{
-    "id": "<UUID>",  # Generated unique identifier for the event
-    "created_at": "<datetime>",  # Timestamp of extraction
-    "date": "<YYYY-MM-DD>",  # Date of the event in ISO 8601 format
-    "description": "<event description>"  # Concise summary of the event
-}}
-
-Guidelines:
-- Focus on events that have legal significance to the case.
-- If multiple dates are associated with an event, choose the most legally relevant one, and mention others in the description if necessary.
-- Summarize event descriptions effectively, emphasizing key details.
-- Ensure consistency in date formats and be mindful of time zones if specified.
-- Generate unique UUIDs for each event.
-"""
     event_response = llm.chat([{"role": "user", "content": event_prompt}])
 
     # Parse response into List[CaseTimelineEvent]
@@ -275,25 +239,10 @@ def detect_causation_chains(events: List[CaseTimelineEvent]) -> List[Dict]:
     # Prepare events for analysis
     events_text = '\n'.join([f"{event.date}: {event.description}" for event in events])
 
-    causation_prompt = f"""
-You are an AI legal analyst. Analyze the following chronological list of events to identify causation chains, distinguishing between causation (where one event directly causes another) and mere correlation.
+    # Load and render the Jinja template
+    template = env.get_template('detect_causation_chains_prompt.j2')
+    causation_prompt = template.render(events_text=events_text)
 
-Events:
-{events_text}
-
-For each causation chain, provide a JSON object:
-{{
-    "chain_events": ["<event_id1>", "<event_id2>", ...],  # Ordered list of event IDs involved in the causation chain
-    "description": "Detailed explanation of how each event leads to the next and their legal significance."
-}}
-
-Guidelines:
-- Focus on legally significant causal relationships between events.
-- Provide detailed explanations, citing how each event influences subsequent events.
-- Include considerations of legal causation, such as proximate cause and foreseeability.
-- Use examples where appropriate to illustrate causal links in a legal context.
-- Ensure that event IDs correspond accurately to the provided events.
-"""
     causation_response = llm.chat([{"role": "user", "content": causation_prompt}])
 
     try:
@@ -356,46 +305,16 @@ def generate_motion(params: MotionParams) -> MotionResult:
     )
 
     # Step 2: Generate motion outline using LLM with structured output
-    outline_prompt = f"""
-You are an AI legal assistant tasked with drafting a motion. Create a detailed outline for a {params.motion_type} motion in the {params.jurisdiction} jurisdiction, adhering to the jurisdiction's specific guidelines and formatting requirements.
+    # Load and render the Jinja template for the outline prompt
+    template = env.get_template('generate_motion_outline_prompt.j2')
+    outline_prompt = template.render(
+        motion_type=params.motion_type,
+        jurisdiction=params.jurisdiction,
+        legal_basis=params.legal_basis,
+        key_arguments=params.key_arguments,
+        precedents=precedents
+    )
 
-Legal Basis:
-{params.legal_basis}
-
-Key Arguments:
-{', '.join(params.key_arguments)}
-
-Relevant Precedents:
-{', '.join([f"{p.case_name} ({p.citation})" for p in precedents])}
-
-The outline should include the following sections, as required by {params.jurisdiction} jurisdiction:
-- Introduction
-- Statement of Facts
-- Legal Standard
-- Argument
-  - Section headings reflecting key arguments
-  - Integration of relevant precedents
-- Conclusion
-
-Guidelines:
-- Craft compelling headings and subheadings that enhance the persuasiveness of the motion.
-- Clearly indicate where key arguments will be placed and how they support the legal basis.
-- Show how relevant precedents will be integrated into the arguments.
-- Ensure adherence to legal formatting and use persuasive language appropriate for the motion.
-- Provide the outline in JSON format with sections and bullet points.
-
-Example:
-{{
-  "Introduction": ["Brief introduction to the motion and its purpose."],
-  "Statement of Facts": ["Fact 1", "Fact 2", "..."],
-  "Legal Standard": ["Description of the legal standards applicable."],
-  "Argument": {{
-    "Heading 1": ["Point 1", "Point 2"],
-    "Heading 2": ["Point 1", "Point 2"]
-  }},
-  "Conclusion": ["Summarize the arguments and state the requested relief."]
-}}
-"""
     outline_response = llm.chat([{"role": "user", "content": outline_prompt}])
     try:
         motion_outline = llm.structured_output(Dict)
@@ -403,19 +322,14 @@ Example:
         raise ValueError(f"Error parsing motion outline: {e}")
 
     # Step 3: Draft the motion using the outline
-    draft_prompt = f"""
-Using the following outline, draft a complete {params.motion_type} motion suitable for filing in {params.jurisdiction} jurisdiction. The motion should be persuasive, professionally written, and adhere to all local court rules.
+    # Load and render the Jinja template for the draft prompt
+    template = env.get_template('generate_motion_draft_prompt.j2')
+    draft_prompt = template.render(
+        motion_type=params.motion_type,
+        jurisdiction=params.jurisdiction,
+        motion_outline=motion_outline
+    )
 
-Outline:
-{motion_outline}
-
-Guidelines:
-- Utilize a formal and persuasive tone appropriate for legal documents.
-- Employ persuasive legal argumentation techniques, such as citing authoritative cases and statutes.
-- Ensure all citations and references are accurate and formatted according to Bluebook standards.
-- Strengthen arguments with relevant facts, evidence, and logical reasoning.
-- Review the motion for clarity, coherence, and legal sufficiency.
-"""
     motion_text = llm.chat([{"role": "user", "content": draft_prompt}])
 
     # Step 4: Extract table of authorities and evidence citations
@@ -516,30 +430,10 @@ def find_precedents(query: PrecedentQuery) -> List[PrecedentResult]:
 
     precedent_results = []
     for result_text, metadata in results:
-        # Analyze each result in detail
-        analysis_prompt = f"""
-You are an AI legal assistant analyzing case law to support a legal issue. Given the following legal case, provide a comprehensive analysis in JSON format according to the `PrecedentResult` schema.
+        # Load and render the Jinja template
+        template = env.get_template('find_precedents_analysis_prompt.j2')
+        analysis_prompt = template.render(case_text=result_text)
 
-Case Text:
-{result_text}
-
-`PrecedentResult` schema:
-{{
-    "case_name": "<case name>",  # Accurate full name of the case
-    "citation": "<citation>",  # Official legal citation
-    "relevance_score": <float between 0.0 and 1.0>,  # Evaluate how relevant the case is to the current issue
-    "key_holdings": ["<holding1>", "<holding2>", ...],  # Major legal principles established
-    "distinguishing_factors": ["<factor1>", "<factor2>", ...],  # Differences from the current case that may limit applicability
-    "application_analysis": "<Detailed analysis of how this case applies to the current legal issue>"
-}}
-
-Guidelines:
-- Provide an in-depth analysis of key holdings and their legal implications.
-- Assess relevance by considering similarities in facts, legal issues, and jurisdiction.
-- Identify distinguishing factors that might affect the precedent's applicability.
-- Evaluate how the precedent supports or undermines the current case.
-- Ensure accuracy in the case name and citation.
-"""
         analysis_response = llm.chat([{"role": "user", "content": analysis_prompt}])
 
         # Parse the result into PrecedentResult
@@ -585,32 +479,10 @@ def analyze_strategy(case_id: str) -> StrategyAnalysis:
         "key_points": key_points,
     }
 
-    # LLM Strategy Analysis
-    analysis_prompt = f"""
-You are a legal strategist tasked with providing a comprehensive analysis for the following case.
+    # Load and render the Jinja template
+    template = env.get_template('analyze_strategy_prompt.j2')
+    analysis_prompt = template.render(analysis_data=analysis_data)
 
-Case Details:
-{analysis_data['case_details']}
-
-Key Points:
-{analysis_data['key_points']}
-
-Your analysis should include:
-
-- **Strengths**: Assess the case's strong points, such as compelling evidence or favorable precedents.
-- **Weaknesses**: Identify vulnerabilities, including weak arguments or problematic evidence.
-- **Evidence Gaps**: Highlight any missing information or evidence that could be crucial.
-- **Recommended Actions**: Propose actionable steps to strengthen the case, with clear rationales.
-- **Risk Analysis**: Evaluate legal and practical risks, considering likelihood and potential impact.
-- **Timeline Issues**: Identify any concerns related to timing, such as statute of limitations or scheduling conflicts.
-
-Guidelines:
-- Use analytical frameworks to systematically assess strengths and weaknesses.
-- Provide practical solutions for evidence gaps, such as obtaining expert testimony or additional documents.
-- Recommendations should be specific, feasible, and legally sound.
-- Include risk mitigation strategies to address identified risks.
-- Ensure the analysis is thorough, objective, and well-structured, adhering to the `StrategyAnalysis` schema.
-"""
     analysis_response = llm.chat([{"role": "user", "content": analysis_prompt}])
 
     # Parse the result into StrategyAnalysis model
@@ -632,26 +504,10 @@ def extract_key_points(doc: CaseDocument) -> Dict:
     Returns:
         Dictionary of key points
     """
-    key_points_prompt = f"""
-You are an AI assistant specializing in legal document analysis. From the following document, extract key points accurately.
+    # Load and render the Jinja template
+    template = env.get_template('extract_key_points_prompt.j2')
+    key_points_prompt = template.render(doc_content=doc.content)
 
-Document:
-{doc.content}
-
-Extract and provide the following in JSON format:
-{{
-    "main_arguments": ["<argument1>", "<argument2>", ...],  # Primary assertions or claims made
-    "evidence_presented": ["<evidence1>", "<evidence2>", ...],  # All significant pieces of evidence cited
-    "legal_issues": ["<issue1>", "<issue2>", ...]  # Legal questions or disputes addressed
-}}
-
-Guidelines:
-- Differentiate between main arguments (central claims) and supporting points (details that bolster arguments).
-- Ensure all relevant evidence is captured, including exhibits, witness statements, and expert reports.
-- Identify both explicit and implicit legal issues, even those not directly stated.
-- Cross-verify extracted points against the document to ensure completeness and accuracy.
-- Use precise legal terminology where appropriate.
-"""
     key_points_response = llm.chat([{"role": "user", "content": key_points_prompt}])
 
     try:
@@ -674,29 +530,14 @@ def generate_discovery(params: DiscoveryParams) -> List[DiscoveryRequest]:
         List[DiscoveryRequest]
     """
     # Step 1: Generate potential discovery items
-    discovery_items_prompt = f"""
-You are a legal expert in the {params.jurisdiction} jurisdiction. Based on the following legal issues and evidence gaps, list all potential {params.discovery_type} requests that could be made to obtain necessary information.
+    template = env.get_template('generate_discovery_items_prompt.j2')
+    discovery_items_prompt = template.render(
+        discovery_type=params.discovery_type,
+        jurisdiction=params.jurisdiction,
+        legal_issues=params.legal_issues,
+        evidence_gaps=params.evidence_gaps
+    )
 
-Legal Issues:
-{', '.join(params.legal_issues)}
-
-Evidence Gaps:
-{', '.join(params.evidence_gaps)}
-
-Guidelines:
-- Provide a comprehensive list covering all possible discovery items relevant to the case.
-- Tailor each request to comply with {params.jurisdiction}'s discovery rules and procedural requirements.
-- Prioritize requests based on their strategic importance to the case outcome.
-- Ensure that each proposed request is ethically appropriate and does not violate any legal standards.
-- Present the list in JSON format as an array of discovery items.
-
-Example:
-[
-    "Request for production of documents related to...",
-    "Interrogatories regarding...",
-    "Deposition of..."
-]
-"""
     discovery_items_response = llm.chat([{"role": "user", "content": discovery_items_prompt}])
     try:
         discovery_items = llm.structured_output(List[str])
@@ -706,19 +547,13 @@ Example:
     # Step 2: Create detailed DiscoveryRequest for each item
     discovery_requests = []
     for item in discovery_items:
-        request_prompt = f"""
-        Draft a formal {params.discovery_type} request for the following item:
+        template = env.get_template('generate_discovery_request_prompt.j2')
+        request_prompt = template.render(
+            discovery_type=params.discovery_type,
+            item=item,
+            jurisdiction=params.jurisdiction
+        )
 
-        "{item}"
-
-        Include:
-        - Request Text
-        - Legal Basis with specific rule citations
-        - Target Evidence
-        - Strategic Purpose
-
-        Provide the information in JSON format according to the DiscoveryRequest schema.
-        """
         request_response = llm.chat([{"role": "user", "content": request_prompt}])
         try:
             discovery_request = llm.structured_output(DiscoveryRequest)
@@ -740,31 +575,20 @@ def analyze_opposition(opposition_details: OppositionDetails) -> OppositionAnaly
     Returns:
         OppositionAnalysis
     """
-    # Compile information about the opposing counsel
-    analysis_prompt = f"""
-You are tasked with analyzing the strategies and weaknesses of opposing counsel, {opposition_details.opposing_counsel}, based on their past cases.
+    # Load and render the Jinja template
+    template = env.get_template('analyze_opposition_prompt.j2')
+    analysis_prompt = template.render(
+        opposing_counsel=opposition_details.opposing_counsel,
+        past_cases=opposition_details.past_cases
+    )
 
-Past Cases:
-{', '.join(opposition_details.past_cases)}
-
-Guidelines:
-- Research and summarize the opposing counsel's litigation history, focusing on {opposition_details.past_cases}.
-- Identify common strategies they employ, such as aggressive motions practice, settlement tendencies, or reliance on specific legal arguments.
-- Detect any notable weaknesses or patterns, such as recurring procedural errors, overreliance on certain precedents, or jury reactions.
-- Consider how these patterns can be ethically leveraged in our case strategy.
-- Emphasize maintaining professional responsibility and adherence to ethical standards in your analysis.
-
-Provide your findings in the following format:
-{{
-    "common_strategies": ["..."],  # List of strategies frequently used by the opposing counsel
-    "notable_weaknesses": ["..."],  # Identified weaknesses or patterns
-    "recommendations": ["..."]  # Suggestions for leveraging this information ethically
-}}
-"""
     analysis_result = llm.chat([{"role": "user", "content": analysis_prompt}])
 
     # Parse the result into OppositionAnalysis model
-    opposition_analysis = llm.structured_output(OppositionAnalysis)
+    try:
+        opposition_analysis = llm.structured_output(OppositionAnalysis)
+    except Exception as e:
+        raise ValueError(f"Error parsing OppositionAnalysis: {e}")
 
     return opposition_analysis
 
@@ -782,41 +606,22 @@ def predict_case_outcome(case_id: str) -> CaseOutcomePrediction:
     """
     # Gather case data
     case_details = case_store[case_id]
-    documents = [
-        doc for doc in document_store.values() if doc.id in case_store[case_id].parties
-    ]
+    documents = fetch_case_documents(case_id)
 
-    # Use LLM to predict outcome
-    prediction_prompt = f"""
-You are an AI legal analyst. Based on the following case details and documents, provide a reasoned prediction of the case outcome.
+    # Load and render the Jinja template
+    template = env.get_template('predict_case_outcome_prompt.j2')
+    prediction_prompt = template.render(
+        case_details=case_details,
+        documents=documents
+    )
 
-Case Details:
-{case_details}
-
-Documents:
-{', '.join(doc.content for doc in documents)}
-
-Guidelines:
-- Assess the likelihood of success as a percentage, considering legal precedents, strength of evidence, and applicable laws.
-- Evaluate potential awards or remedies that may be granted if successful.
-- Identify key factors influencing the outcome, including factual and legal elements.
-- Analyze risk factors such as unfavorable precedents, legal hurdles, or external influences (e.g., judge or jury tendencies).
-- Transparently explain the reasoning behind your predictions.
-- Consider alternative outcomes and suggest contingency plans where appropriate.
-
-Provide your prediction in the following format:
-{{
-    "likelihood_of_success": "<percentage>",
-    "potential_awards": ["..."],
-    "key_factors": ["..."],
-    "risk_factors": ["..."],
-    "contingency_plans": ["..."]
-}}
-"""
     prediction_result = llm.chat([{"role": "user", "content": prediction_prompt}])
 
     # Parse the result into CaseOutcomePrediction model
-    outcome_prediction = llm.structured_output(CaseOutcomePrediction)
+    try:
+        outcome_prediction = llm.structured_output(CaseOutcomePrediction)
+    except Exception as e:
+        raise ValueError(f"Error parsing CaseOutcomePrediction: {e}")
 
     return outcome_prediction
 
@@ -838,37 +643,30 @@ def generate_client_communication(
     # Fetch client details (simulated)
     client_details = {"name": "Client Name"}  # Placeholder
 
-    # Generate communication using LLM
-    communication_prompt = f"""
-    Draft a {communication_params.preferred_method} to {client_details['name']}.
+    # Load and render the communication prompt template
+    template = env.get_template('generate_client_communication_prompt.j2')
+    communication_prompt = template.render(
+        client_name=client_details['name'],
+        communication_params=communication_params
+    )
 
-    Subject: {communication_params.subject}
-
-    Message:
-    {communication_params.message}
-
-    Guidelines:
-    - Use clear and empathetic language tailored to the client's level of legal understanding.
-    - Begin with a summary of the key points to ensure clarity.
-    - Clearly outline any necessary actions the client must take.
-    - Adjust the tone based on the urgency level ({communication_params.urgency_level}), ensuring it's appropriate and professional.
-    - Include instructions for confirming receipt and offer options for follow-up or scheduling a meeting.
-    - Conclude with contact information and an invitation for the client to reach out with questions.
-    """
     communication_text = llm.chat([{"role": "user", "content": communication_prompt}])
 
-    # Determine next steps and schedule
-    next_steps_prompt = f"""
-    Based on the above communication, list any next steps and propose meeting times if applicable.
-    """
+    # Load and render the next steps prompt template
+    template = env.get_template('generate_next_steps_prompt.j2')
+    next_steps_prompt = template.render(communication_text=communication_text)
+
     next_steps_result = llm.chat([{"role": "user", "content": next_steps_prompt}])
 
     # Parse results into ClientCommunication model
-    client_communication = ClientCommunication(
-        communication_text=communication_text,
-        next_steps=[],  # Parsing from next_steps_result
-        scheduled_meetings=[],  # Parsing from next_steps_result
-    )
+    try:
+        client_communication = ClientCommunication(
+            communication_text=communication_text,
+            next_steps=[],  # Parsing from next_steps_result
+            scheduled_meetings=[],  # Parsing from next_steps_result
+        )
+    except Exception as e:
+        raise ValueError(f"Error parsing ClientCommunication: {e}")
 
     return client_communication
 
@@ -884,24 +682,17 @@ def summarize_legal_research(doc_content: str) -> ResearchSummary:
     Returns:
         ResearchSummary
     """
-    # Use LLM to summarize the document
-    summary_prompt = f"""
-You are an AI assistant tasked with summarizing legal documents. Summarize the following document into key points, focusing on important cases, statutory references, and their implications.
+    # Load and render the Jinja template
+    template = env.get_template('summarize_legal_research_prompt.j2')
+    summary_prompt = template.render(doc_content=doc_content)
 
-Document:
-{doc_content}
-
-Guidelines:
-- Effectively condense complex legal information into clear, concise key points.
-- Identify and highlight significant cases and statutes, explaining their relevance.
-- Maintain accuracy and avoid omitting critical information.
-- Organize the summary logically, grouping related points together.
-- Use bullet points or numbered lists for clarity.
-"""
     summary_result = llm.chat([{"role": "user", "content": summary_prompt}])
 
     # Parse the result into ResearchSummary model
-    research_summary = llm.structured_output(ResearchSummary)
+    try:
+        research_summary = llm.structured_output(ResearchSummary)
+    except Exception as e:
+        raise ValueError(f"Error parsing ResearchSummary: {e}")
 
     return research_summary
 
@@ -922,35 +713,20 @@ def compare_documents(doc_id_1: str, doc_id_2: str) -> DocumentComparison:
     doc1 = document_store[doc_id_1]
     doc2 = document_store[doc_id_2]
 
-    # Use LLM to compare documents
-    compare_prompt = f"""
-You are tasked with comparing two legal documents to identify similarities and differences.
+    # Load and render the Jinja template
+    template = env.get_template('compare_documents_prompt.j2')
+    compare_prompt = template.render(
+        doc1_content=doc1.content,
+        doc2_content=doc2.content
+    )
 
-Document 1:
-{doc1.content}
-
-Document 2:
-{doc2.content}
-
-Guidelines:
-- Perform a systematic side-by-side analysis of the documents.
-- Identify identical sections, including wording, structure, and citations.
-- Highlight substantive differences, such as variations in arguments, facts, or legal reasoning.
-- Note minor differences that may impact interpretation.
-- Assess the legal significance of the identified similarities and differences.
-- Present the comparison results clearly and logically, using headings or tables where appropriate.
-
-Provide your analysis in the following format:
-{{
-    "identical_sections": ["..."],
-    "differing_sections": ["..."],
-    "overall_analysis": "..."
-}}
-"""
     comparison_result = llm.chat([{"role": "user", "content": compare_prompt}])
 
     # Parse the result into DocumentComparison model
-    document_comparison = llm.structured_output(DocumentComparison)
+    try:
+        document_comparison = llm.structured_output(DocumentComparison)
+    except Exception as e:
+        raise ValueError(f"Error parsing DocumentComparison: {e}")
 
     return document_comparison
 
@@ -969,36 +745,19 @@ def schedule_case_events(case_id: str) -> Schedule:
     # Retrieve timeline events
     events = timeline_event_store.get(case_id, [])
 
-    # Schedule events and set reminders
-    schedule_prompt = f"""
-    Based on the following case events, create a detailed schedule with all relevant deadlines, hearings, and filings.
+    # Load and render the Jinja template
+    template = env.get_template('schedule_case_events_prompt.j2')
+    schedule_prompt = template.render(
+        events=events
+    )
 
-    Events:
-    {', '.join(f"{event.date}: {event.description}" for event in events)}
-
-    Guidelines:
-    - Include all pertinent dates and deadlines, ensuring none are overlooked.
-    - Set reminders with appropriate lead times before each event (e.g., 7 days, 24 hours).
-    - Synchronize the schedule with calendar systems and comply with any legal or court-mandated timelines.
-    - Consider time zone differences and ensure all stakeholders are aware of event times.
-    - Present the schedule in a structured format, such as a table or list, including dates, event descriptions, and reminder times.
-
-    Provide the schedule in the following format:
-    {{
-        "schedule": [
-            {{
-                "date": "<YYYY-MM-DD>",
-                "event": "<description>",
-                "reminders": ["<reminder1>", "<reminder2>", ...]
-            }},
-            ...
-        ]
-    }}
-    """
     schedule_result = llm.chat([{"role": "user", "content": schedule_prompt}])
 
     # Parse the result into Schedule model
-    schedule = llm.structured_output(Schedule)
+    try:
+        schedule = llm.structured_output(Schedule)
+    except Exception as e:
+        raise ValueError(f"Error parsing Schedule: {e}")
 
     return schedule
 
@@ -1017,36 +776,16 @@ def assess_risks(case_id: str) -> RiskAssessment:
     # Gather case data
     case_details = case_store[case_id]
 
-    # Use LLM to assess risks
-    risk_prompt = f"""
-    You are an AI legal analyst. Assess the risks associated with the following case.
+    # Load and render the Jinja template
+    template = env.get_template('assess_risks_prompt.j2')
+    risk_prompt = template.render(case_details=case_details)
 
-    Case Details:
-    {case_details}
-
-    Guidelines:
-    - Identify both legal risks (e.g., unfavorable precedents, procedural issues) and non-legal risks (e.g., reputational damage, financial implications).
-    - For each risk, assign a probability level (high, medium, low) based on available data.
-    - Assess the potential impact of each risk on the case outcome and client interests.
-    - Propose realistic and actionable mitigation plans for each identified risk.
-    - Document and justify all assessments clearly.
-
-    Provide your assessment in the following format:
-    {{
-        "identified_risks": [
-            {{
-                "risk": "<description>",
-                "probability": "<high/medium/low>",
-                "impact": "<assessment>",
-                "mitigation_plan": "<plan>"
-            }},
-            ...
-        ]
-    }}
-    """
     risk_result = llm.chat([{"role": "user", "content": risk_prompt}])
 
     # Parse the result into RiskAssessment model
-    risk_assessment = llm.structured_output(RiskAssessment)
+    try:
+        risk_assessment = llm.structured_output(RiskAssessment)
+    except Exception as e:
+        raise ValueError(f"Error parsing RiskAssessment: {e}")
 
     return risk_assessment

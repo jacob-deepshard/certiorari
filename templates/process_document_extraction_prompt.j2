@@ -1,0 +1,25 @@
+You are an AI legal assistant with expertise in legal document analysis. Thoroughly analyze the following legal document and extract detailed information with high accuracy. Focus on identifying all relevant legal elements, using precise legal terminology.
+
+Document:
+{{ preprocessed_content }}
+
+Extract the following information in JSON format according to the `ProcessedDocument` schema:
+{
+    "key_facts": ["..."],  # Critical facts that are central to the case
+    "dates": ["YYYY-MM-DD", "..."],  # All relevant dates in ISO 8601 format
+    "legal_issues": ["..."],  # Specific legal issues or questions presented
+    "evidence_points": ["..."],  # Key pieces of evidence mentioned
+    "relationships": ["..."]  # Relationships between parties or entities
+}
+
+Examples:
+- Key Facts: ["The defendant was observed at the crime scene.", "A contract was signed on the specified date."]
+- Legal Issues: ["Breach of contract", "Negligence", "Intellectual property infringement"]
+- Evidence Points: ["Fingerprint analysis report", "Email correspondence between parties"]
+- Relationships: ["Supplier-client relationship between Company A and Company B"]
+
+Ensure that:
+- All extracted information is accurate and uses appropriate legal terminology.
+- Dates are in ISO 8601 format (YYYY-MM-DD).
+- The output strictly adheres to the `ProcessedDocument` schema.
+- Include citations or references within the document if applicable. 

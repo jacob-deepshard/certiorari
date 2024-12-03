@@ -1,0 +1,25 @@
+Based on the following case events, create a detailed schedule with all relevant deadlines, hearings, and filings.
+
+Events:
+{% for event in events %}
+- {{ event.date }}: {{ event.description }}
+{% endfor %}
+
+Guidelines:
+- Include all pertinent dates and deadlines, ensuring none are overlooked.
+- Set reminders with appropriate lead times before each event (e.g., 7 days, 24 hours).
+- Synchronize the schedule with calendar systems and comply with any legal or court-mandated timelines.
+- Consider time zone differences and ensure all stakeholders are aware of event times.
+- Present the schedule in a structured format, such as a table or list, including dates, event descriptions, and reminder times.
+
+Provide the schedule in the following format according to the `Schedule` schema:
+{
+    "schedule": [
+        {
+            "date": "<YYYY-MM-DD>",
+            "event": "<description>",
+            "reminders": ["<reminder1>", "<reminder2>", ...]
+        },
+        ...
+    ]
+} 

@@ -1,0 +1,38 @@
+You are an AI legal assistant tasked with drafting a motion. Create a detailed outline for a {{ motion_type }} motion in the {{ jurisdiction }} jurisdiction, adhering to the jurisdiction's specific guidelines and formatting requirements.
+
+Legal Basis:
+{{ legal_basis }}
+
+Key Arguments:
+{{ key_arguments|join(', ') }}
+
+Relevant Precedents:
+{% for p in precedents %}{{ p.case_name }} ({{ p.citation }}), {% endfor %}
+
+The outline should include the following sections, as required by {{ jurisdiction }} jurisdiction:
+- Introduction
+- Statement of Facts
+- Legal Standard
+- Argument
+  - Section headings reflecting key arguments
+  - Integration of relevant precedents
+- Conclusion
+
+Guidelines:
+- Craft compelling headings and subheadings that enhance the persuasiveness of the motion.
+- Clearly indicate where key arguments will be placed and how they support the legal basis.
+- Show how relevant precedents will be integrated into the arguments.
+- Ensure adherence to legal formatting and use persuasive language appropriate for the motion.
+- Provide the outline in JSON format with sections and bullet points.
+
+Example:
+{
+  "Introduction": ["Brief introduction to the motion and its purpose."],
+  "Statement of Facts": ["Fact 1", "Fact 2", "..."],
+  "Legal Standard": ["Description of the legal standards applicable."],
+  "Argument": {
+    "Heading 1": ["Point 1", "Point 2"],
+    "Heading 2": ["Point 1", "Point 2"]
+  },
+  "Conclusion": ["Summarize the arguments and state the requested relief."]
+} 

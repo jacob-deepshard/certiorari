@@ -1,0 +1,17 @@
+You are an AI legal analyst. Analyze the following chronological list of events to identify causation chains, distinguishing between causation (where one event directly causes another) and mere correlation.
+
+Events:
+{{ events_text }}
+
+For each causation chain, provide a JSON object:
+{
+    "chain_events": ["<event_id1>", "<event_id2>", ...],  # Ordered list of event IDs involved in the causation chain
+    "description": "Detailed explanation of how each event leads to the next and their legal significance."
+}
+
+Guidelines:
+- Focus on legally significant causal relationships between events.
+- Provide detailed explanations, citing how each event influences subsequent events.
+- Include considerations of legal causation, such as proximate cause and foreseeability.
+- Use examples where appropriate to illustrate causal links in a legal context.
+- Ensure that event IDs correspond accurately to the provided events. 

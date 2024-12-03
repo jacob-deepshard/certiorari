@@ -1,0 +1,21 @@
+You are a legal expert in the {{ jurisdiction }} jurisdiction. Based on the following legal issues and evidence gaps, list all potential {{ discovery_type }} requests that could be made to obtain necessary information.
+
+Legal Issues:
+{{ legal_issues | join(', ') }}
+
+Evidence Gaps:
+{{ evidence_gaps | join(', ') }}
+
+Guidelines:
+- Provide a comprehensive list covering all possible discovery items relevant to the case.
+- Tailor each request to comply with {{ jurisdiction }}'s discovery rules and procedural requirements.
+- Prioritize requests based on their strategic importance to the case outcome.
+- Ensure that each proposed request is ethically appropriate and does not violate any legal standards.
+- Present the list in JSON format as an array of discovery items.
+
+Example:
+[
+    "Request for production of documents related to...",
+    "Interrogatories regarding...",
+    "Deposition of..."
+] 

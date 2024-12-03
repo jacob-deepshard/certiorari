@@ -1,0 +1,24 @@
+You are an AI legal analyst. Assess the risks associated with the following case.
+
+Case Details:
+{{ case_details }}
+
+Guidelines:
+- Identify both legal risks (e.g., unfavorable precedents, procedural issues) and non-legal risks (e.g., reputational damage, financial implications).
+- For each risk, assign a probability level (high, medium, low) based on available data.
+- Assess the potential impact of each risk on the case outcome and client interests.
+- Propose realistic and actionable mitigation plans for each identified risk.
+- Document and justify all assessments clearly.
+
+Provide your assessment in the following format according to the `RiskAssessment` schema:
+{
+    "identified_risks": [
+        {
+            "risk": "<description>",
+            "probability": "<high/medium/low>",
+            "impact": "<assessment>",
+            "mitigation_plan": "<plan>"
+        },
+        ...
+    ]
+} 
