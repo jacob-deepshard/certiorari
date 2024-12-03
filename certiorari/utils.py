@@ -1,3 +1,4 @@
+import functools
 import inspect
 import uuid
 from collections.abc import Callable
@@ -59,32 +60,16 @@ class App(BaseModel):
         self.__dict__.update(metadata.model_dump())
 
     def tool(self, tool: Callable):
-        truffle.register_tool(tool)
-        self.tools.append(tool)
+        @functools.wraps(tool)
+        def wrapper(*args, **kwargs):
+            return tool(*args, **kwargs)
+
+        truffle.register_tool(wrapper)
+        self.tools.append(wrapper)
         assert tool.__name__ is not None
         assert not hasattr(self, tool.__name__)
-        setattr(self, tool.__name__, tool)
+        setattr(self, tool.__name__, wrapper)
 
     def start(self):
-
-        truffle_app = truffle.build_app_from_class(self)
-
-        # Inject metadata and app into caller's namespace and __main__ because the truffle sdk
-        # seems to have no cleaner way to make a app run
-
-        frame = inspect.currentframe().f_back
-        first_frame = True
-        while frame:
-            frame = frame.f_back
-            found_main_frame = frame.f_globals["__name__"] == "__main__"
-            found_first_calling_frame = first_frame
-
-            if found_first_calling_frame or found_main_frame:
-                frame.f_locals["app"] = truffle_app
-
-            if found_first_calling_frame:
-                first_frame = False
-            if found_main_frame:
-                break
-
-        return truffle_app
+        # the naming is outdated but this is just starting a grpc server that exposes the endpoints we decorated with @app.tool
+        return truffle.build_app_from_class(self)
