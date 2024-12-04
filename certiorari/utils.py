@@ -174,8 +174,32 @@ class App(BaseModel):
         return decorator
 
     def start(self):
+        # Start the file watcher
+        self._start_watcher()
+
         for tool in self.tools:
             tool.register_with_truffle()
         
         # the naming is outdated but this is just starting a grpc server that exposes the endpoints we decorated with @app.tool
         return truffle.build_app_from_class(self)
+
+    def _start_watcher(self):
+        import sys
+        import os
+        from watchdog.observers import Observer
+        from watchdog.events import FileSystemEventHandler
+
+        class RestartOnChangeHandler(FileSystemEventHandler):
+            def __init__(self, app):
+                self.app = app
+
+            def on_any_event(self, event):
+                if event.event_type in ('modified', 'created', 'deleted') and event.src_path.endswith('.py'):
+                    print(f"Detected change in {event.src_path}, restarting interpreter...")
+                    observer.stop()
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        event_handler = RestartOnChangeHandler(self)
+        observer = Observer()
+        observer.schedule(event_handler, path='.', recursive=True)
+        observer.start()
