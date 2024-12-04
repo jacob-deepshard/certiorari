@@ -95,7 +95,7 @@ class App(BaseModel):
     def metadata(self, metadata: truffle.AppMetadata):
         self.__dict__.update(metadata.model_dump())
     
-    def tool(self, name: str=None, description: str=None, start_fn: Callable=None, stop_fn: Callable=None):
+    def tool(self, start_fn: Callable=None, stop_fn: Callable=None, *, name: str=None, description: str=None):
         '''
         Make a function into a tool. Use like a decorator or a function call.
         
